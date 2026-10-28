@@ -17,14 +17,17 @@ export interface ErrorContext {
 }
 
 /** Clase base: todos los errores del server heredan de aquí. */
+/** abstract: no se puede hacer new AppError(). Solo sirve como molde para los demás errores.*/
 export abstract class AppError extends Error {
+  /**code: un identificador fijo, como "GITHUB_API_ERROR", que cada subclase está obligada a definir. Le sirve al LLM, y a ti cuando lees los logs. */
   abstract readonly code: string;
-  /** true si vale la pena reintentar la operación. */
+  /** true si vale la pena reintentar la operación.x defecto es false */
   readonly retryable: boolean = false;
 
   constructor(message: string, options?: { cause?: unknown }) {
     super(message, options);
     this.name = new.target.name;
+    /**pone en name el nombre real de la clase que se instanció, por ejemplo "NetworkError" */
   }
 }
 
@@ -45,7 +48,7 @@ export class AuthenticationError extends AppError {
   readonly code = "AUTHENTICATION_ERROR";
 }
 
-/** GitHub respondió con un error HTTP (403, 404, 409, 422, 5xx...). */
+/** GitHub respondió con un error HTTP (403, 404, 409, 422, 500...). */
 export class GitHubAPIError extends AppError {
   readonly code = "GITHUB_API_ERROR";
   override readonly retryable: boolean;
