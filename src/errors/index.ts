@@ -12,6 +12,8 @@ import type { ZodError } from "zod";
 export interface ErrorContext {
   owner?: string;
   repo?: string;
+  /** Branch usada en la operación (para distinguir "branch no existe" de "repo no existe"). */
+  branch?: string;
   /** Nombre de la operación, por ejemplo "create_issue". */
   operation?: string;
 }
@@ -150,6 +152,20 @@ function githubDetails(error: HttpLikeError): string {
   return details?.length ? details.join("; ") : (data?.message ?? error.message ?? "");
 }
 
+/** GitHub responde 404/422 con "Branch x not found" o "No commit found for the ref x". */
+function isMissingBranch(error: HttpLikeError, context: ErrorContext): boolean {
+  return Boolean(context.branch) && /branch|no commit found for the ref/i.test(githubDetails(error));
+}
+
+function missingBranchError(error: HttpLikeError, context: ErrorContext): GitHubAPIError {
+  return new GitHubAPIError(
+    `La branch ${context.branch} no existe en el repositorio ${describeRepo(context)}. ` +
+      "Verifica el nombre u omite la branch para usar la branch por defecto.",
+    error.status,
+    { cause: error },
+  );
+}
+
 function rateLimitInfo(error: HttpLikeError): { limited: boolean; retryAfterMs?: number } {
   const headers = error.response?.headers ?? {};
   const retryAfter = headers["retry-after"];
@@ -206,6 +222,7 @@ export function toAppError(error: unknown, context: ErrorContext = {}): AppError
       }
 
       case 404:
+        if (isMissingBranch(error, context)) return missingBranchError(error, context);
         return new GitHubAPIError(
           `El repositorio ${repo} no fue encontrado. Verifica el nombre e intenta de nuevo.`,
           404,
@@ -221,6 +238,7 @@ export function toAppError(error: unknown, context: ErrorContext = {}): AppError
         );
 
       case 422: {
+        if (isMissingBranch(error, context)) return missingBranchError(error, context);
         const details = githubDetails(error);
         if (/already exists/i.test(details)) {
           return new GitHubAPIError(
