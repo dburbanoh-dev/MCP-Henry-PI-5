@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Variables de entorno (NUNCA commitear el token)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Tests / coverage
+coverage/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
