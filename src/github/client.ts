@@ -16,7 +16,8 @@ export function getToken(env: NodeJS.ProcessEnv = process.env): string {
   if (!token) {
     throw new AuthenticationError(
       "No se encontró GITHUB_TOKEN. Crea un Personal Access Token en https://github.com/settings/tokens " +
-        "(scopes: repo, user, admin:org) y agrégalo a tu .env o a la configuración del MCP server en Antigravity.",
+        "(classic con scopes repo, user y admin:org, o fine-grained con permisos Administration, Contents e Issues " +
+        "en Read and write) y agrégalo a tu .env o a la configuración del MCP server en Antigravity.",
     );
   }
   return token;
@@ -27,10 +28,12 @@ export function createGitHubClient(token: string = getToken()): Octokit {
   return new Octokit({
     auth: token,
     userAgent: "github-mcp-server/1.0.0",
-    // Los logs internos de Octokit pasan por nuestro logger (stderr + sin secretos)
+    // Los logs internos de Octokit pasan por nuestro logger (stderr + sin secretos).
+    // Octokit registra cada request HTTP en "info": se bajan a "debug" para no
+    // llenar los logs; con LOG_LEVEL=debug se ven todas las llamadas a GitHub.
     log: {
       debug: (message: string) => logger.debug(message),
-      info: (message: string) => logger.info(message),
+      info: (message: string) => logger.debug(message),
       warn: (message: string) => logger.warn(message),
       error: (message: string) => logger.error(message),
     },

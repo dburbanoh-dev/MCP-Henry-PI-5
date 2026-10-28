@@ -215,7 +215,8 @@ export function toAppError(error: unknown, context: ErrorContext = {}): AppError
         }
         return new GitHubAPIError(
           `No tienes permisos para realizar esta operación en el repositorio ${repo}. ` +
-            "Verifica que el token tenga los scopes repo, user y admin:org.",
+            "Verifica que el token tenga los scopes repo, user y admin:org (classic) " +
+            "o los permisos Administration, Contents e Issues en Read and write (fine-grained).",
           error.status,
           { cause: error },
         );
