@@ -5,6 +5,9 @@ import { formatErrorForLLM } from "../errors/index.js";
 import { getGitHubClient } from "../github/client.js";
 import { parseInput } from "../schemas/index.js";
 import { logger } from "../utils/logging.js";
+import { addCommentToIssueTool } from "./add-comment-to-issue.js";
+import { closeIssueTool } from "./close-issue.js";
+import { createBranchTool } from "./create-branch.js";
 import { createCommitTool } from "./create-commit.js";
 import { createIssueTool } from "./create-issue.js";
 import { createRepositoryTool } from "./create-repository.js";
@@ -19,6 +22,10 @@ export const tools: ToolDefinition[] = [
   listRepositoriesTool,
   createCommitTool,
   listIssuesTool,
+  // Extra credit
+  createBranchTool,
+  closeIssueTool,
+  addCommentToIssueTool,
 ] as ToolDefinition[];
 
 /**

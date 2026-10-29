@@ -34,13 +34,16 @@ beforeEach(() => {
 });
 
 describe("catálogo de tools", () => {
-  it("expone las 5 tools obligatorias con descripción", () => {
+  it("expone las 5 tools obligatorias y las 3 extra, con descripción", () => {
     expect(tools.map((t) => t.name)).toEqual([
       "create_repository",
       "create_issue",
       "list_repositories",
       "create_commit",
       "list_issues",
+      "create_branch",
+      "close_issue",
+      "add_comment_to_issue",
     ]);
     for (const tool of tools) expect(tool.description.length).toBeGreaterThan(50);
   });
@@ -102,7 +105,7 @@ describe("integración MCP (cliente <-> server en memoria)", () => {
     const { tools: listed } = await client.listTools();
 
     const createRepo = listed.find((t) => t.name === "create_repository");
-    expect(listed).toHaveLength(5);
+    expect(listed).toHaveLength(8);
     expect(createRepo?.inputSchema.required).toEqual(["name"]);
     expect(createRepo?.annotations?.readOnlyHint).toBe(false);
   });

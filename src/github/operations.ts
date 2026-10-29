@@ -1,13 +1,16 @@
 import type { Octokit } from "@octokit/rest";
-import { ValidationError, type ErrorContext } from "../errors/index.js";
+import { GitHubAPIError, ValidationError, type ErrorContext } from "../errors/index.js";
 import type {
+  AddCommentToIssueInput,
+  CloseIssueInput,
+  CreateBranchInput,
   CreateCommitInput,
   CreateIssueInput,
   CreateRepositoryInput,
   ListIssuesInput,
   ListRepositoriesInput,
 } from "../schemas/index.js";
-import type { CommitResult, IssueSummary, RepositorySummary } from "../types.js";
+import type { BranchResult, CommentResult, CommitResult, IssueSummary, RepositorySummary } from "../types.js";
 import { logger } from "../utils/logging.js";
 import { withRetry } from "../utils/retry.js";
 
@@ -261,4 +264,97 @@ export async function createCommit(octokit: Octokit, input: CreateCommitInput): 
   };
   logger.info("Commit creado", { repo: `${owner}/${input.repo}`, path: input.path, action: result.action });
   return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Tools extra: branches y gestión de issues                           */
+/* ------------------------------------------------------------------ */
+
+/** Crea una branch nueva apuntando al último commit de otra (por defecto, la principal). */
+export async function createBranch(octokit: Octokit, input: CreateBranchInput): Promise<BranchResult> {
+  const owner = await resolveOwner(octokit, input.owner);
+  const context: ErrorContext = { owner, repo: input.repo, operation: "create_branch" };
+
+  // Si no se indicó branch de origen, se usa la principal del repo (main, master...)
+  const fromBranch =
+    input.fromBranch ??
+    (await withRetry(async () => (await octokit.rest.repos.get({ owner, repo: input.repo })).data.default_branch, {
+      context,
+    }));
+
+  // Una branch en git es solo un puntero a un commit: primero se busca el SHA del origen
+  const sha = await withRetry(
+    async () => {
+      try {
+        const { data } = await octokit.rest.git.getRef({ owner, repo: input.repo, ref: `heads/${fromBranch}` });
+        return data.object.sha;
+      } catch (error) {
+        if ((error as { status?: number }).status === 404) {
+          throw new GitHubAPIError(
+            `La branch de origen ${fromBranch} no existe en el repositorio ${owner}/${input.repo} ` +
+              "(o el repositorio no existe). Verifica el nombre u omite fromBranch para usar la branch por defecto.",
+            404,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    },
+    { context: { ...context, branch: fromBranch } },
+  );
+
+  await withRetry(
+    () => octokit.rest.git.createRef({ owner, repo: input.repo, ref: `refs/heads/${input.branch}`, sha }),
+    { context: { ...context, branch: input.branch } },
+  );
+
+  logger.info("Branch creada", { repo: `${owner}/${input.repo}`, branch: input.branch, fromBranch });
+  return {
+    name: input.branch,
+    fromBranch,
+    sha,
+    url: `https://github.com/${owner}/${input.repo}/tree/${input.branch}`,
+  };
+}
+
+/** Cierra un issue indicando el motivo (resuelto o no planificado). */
+export async function closeIssue(octokit: Octokit, input: CloseIssueInput): Promise<IssueSummary> {
+  const owner = await resolveOwner(octokit, input.owner);
+  const context: ErrorContext = { owner, repo: input.repo, issueNumber: input.issueNumber, operation: "close_issue" };
+  const { data } = await withRetry(
+    () =>
+      octokit.rest.issues.update({
+        owner,
+        repo: input.repo,
+        issue_number: input.issueNumber,
+        state: "closed",
+        state_reason: input.reason,
+      }),
+    { context },
+  );
+  logger.info("Issue cerrado", { repo: `${owner}/${input.repo}`, number: data.number, reason: input.reason });
+  return toIssueSummary(data);
+}
+
+/** Agrega un comentario a un issue existente. */
+export async function addCommentToIssue(octokit: Octokit, input: AddCommentToIssueInput): Promise<CommentResult> {
+  const owner = await resolveOwner(octokit, input.owner);
+  const context: ErrorContext = {
+    owner,
+    repo: input.repo,
+    issueNumber: input.issueNumber,
+    operation: "add_comment_to_issue",
+  };
+  const { data } = await withRetry(
+    () =>
+      octokit.rest.issues.createComment({
+        owner,
+        repo: input.repo,
+        issue_number: input.issueNumber,
+        body: input.body,
+      }),
+    { context },
+  );
+  logger.info("Comentario agregado", { repo: `${owner}/${input.repo}`, issue: input.issueNumber });
+  return { id: data.id, issueNumber: input.issueNumber, url: data.html_url };
 }

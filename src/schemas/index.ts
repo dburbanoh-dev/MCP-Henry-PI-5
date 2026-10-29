@@ -199,6 +199,48 @@ export const listIssuesSchema = z.object({
 });
 
 /* ------------------------------------------------------------------ */
+/* Schemas de las tools extra                                          */
+/* ------------------------------------------------------------------ */
+
+/** Número de issue: entero positivo, como aparece en la URL (#12). */
+const issueNumberSchema = z
+  .number()
+  .int("issueNumber debe ser un número entero")
+  .min(1, "issueNumber debe ser al menos 1")
+  .describe("Número del issue, el que aparece después de # (ejemplo: 12). Se obtiene con list_issues.");
+
+export const createBranchSchema = z.object({
+  owner: ownerSchema.optional(),
+  repo: existingRepoNameSchema,
+  branch: branchSchema.describe("Nombre de la branch nueva. Ejemplo: feature/login"),
+  fromBranch: branchSchema
+    .optional()
+    .describe("Branch desde la que se crea (opcional). Si se omite, se usa la branch por defecto del repo."),
+});
+
+export const closeIssueSchema = z.object({
+  owner: ownerSchema.optional(),
+  repo: existingRepoNameSchema,
+  issueNumber: issueNumberSchema,
+  reason: z
+    .enum(["completed", "not_planned"], { message: "reason debe ser completed o not_planned" })
+    .default("completed")
+    .describe("Motivo del cierre: completed (resuelto) o not_planned (no se hará). Por defecto completed."),
+});
+
+export const addCommentToIssueSchema = z.object({
+  owner: ownerSchema.optional(),
+  repo: existingRepoNameSchema,
+  issueNumber: issueNumberSchema,
+  body: z
+    .string()
+    .trim()
+    .min(1, "El comentario no puede estar vacío")
+    .max(65_536, "El comentario no puede superar 65536 caracteres")
+    .describe("Texto del comentario en Markdown."),
+});
+
+/* ------------------------------------------------------------------ */
 /* Tipos inferidos (una sola fuente de verdad: el schema)              */
 /* ------------------------------------------------------------------ */
 
@@ -207,6 +249,9 @@ export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 export type ListRepositoriesInput = z.infer<typeof listRepositoriesSchema>;
 export type CreateCommitInput = z.infer<typeof createCommitSchema>;
 export type ListIssuesInput = z.infer<typeof listIssuesSchema>;
+export type CreateBranchInput = z.infer<typeof createBranchSchema>;
+export type CloseIssueInput = z.infer<typeof closeIssueSchema>;
+export type AddCommentToIssueInput = z.infer<typeof addCommentToIssueSchema>;
 
 /**
  * Valida `input` con `schema`. Si es válido devuelve los datos ya limpios

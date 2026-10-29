@@ -11,7 +11,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc",
@@ -30,7 +30,11 @@
     "ai-agents",
     "octokit"
   ],
-  "author": "",
+  "author": "dburbanoh-dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dburbanoh-dev/MCP-Henry-PI-5.git"
+  },
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

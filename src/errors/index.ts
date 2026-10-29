@@ -14,6 +14,8 @@ export interface ErrorContext {
   repo?: string;
   /** Branch usada en la operación (para distinguir "branch no existe" de "repo no existe"). */
   branch?: string;
+  /** Número de issue (para distinguir "issue no existe" de "repo no existe"). */
+  issueNumber?: number;
   /** Nombre de la operación, por ejemplo "create_issue". */
   operation?: string;
 }
@@ -224,6 +226,14 @@ export function toAppError(error: unknown, context: ErrorContext = {}): AppError
 
       case 404:
         if (isMissingBranch(error, context)) return missingBranchError(error, context);
+        if (context.issueNumber !== undefined) {
+          return new GitHubAPIError(
+            `El issue #${context.issueNumber} no existe en el repositorio ${repo} (o el repositorio no existe). ` +
+              "Usa list_issues para ver los números de issue disponibles.",
+            404,
+            { cause: error },
+          );
+        }
         return new GitHubAPIError(
           `El repositorio ${repo} no fue encontrado. Verifica el nombre e intenta de nuevo.`,
           404,
@@ -241,6 +251,13 @@ export function toAppError(error: unknown, context: ErrorContext = {}): AppError
       case 422: {
         if (isMissingBranch(error, context)) return missingBranchError(error, context);
         const details = githubDetails(error);
+        if (/reference already exists/i.test(details)) {
+          return new GitHubAPIError(
+            `La branch ${context.branch ?? "indicada"} ya existe en el repositorio ${repo}. Elige otro nombre.`,
+            422,
+            { cause: error },
+          );
+        }
         if (/already exists/i.test(details)) {
           return new GitHubAPIError(
             `Ya existe un repositorio llamado ${context.repo ?? "así"} en tu cuenta. Elige otro nombre.`,

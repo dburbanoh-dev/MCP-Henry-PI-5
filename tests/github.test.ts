@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthenticationError, ValidationError } from "../src/errors/index.js";
 import { createGitHubClient, getGitHubClient, getToken, resetGitHubClient } from "../src/github/client.js";
 import {
+  addCommentToIssue,
+  closeIssue,
+  createBranch,
   createCommit,
   createIssue,
   createRepository,
@@ -18,12 +21,14 @@ function fakeOctokit() {
   const rest = {
     users: { getAuthenticated: vi.fn().mockResolvedValue({ data: { login: "octocat" } }) },
     repos: {
+      get: vi.fn(),
       createForAuthenticatedUser: vi.fn(),
       listForAuthenticatedUser: vi.fn(),
       getContent: vi.fn(),
       createOrUpdateFileContents: vi.fn(),
     },
-    issues: { create: vi.fn(), listForRepo: vi.fn() },
+    git: { getRef: vi.fn(), createRef: vi.fn() },
+    issues: { create: vi.fn(), listForRepo: vi.fn(), update: vi.fn(), createComment: vi.fn() },
   };
   return { rest, octokit: { rest } as unknown as Octokit };
 }
@@ -213,6 +218,100 @@ describe("createCommit", () => {
     await expect(createCommit(octokit, { ...input, branch: "nope" })).rejects.toThrow(
       "La branch nope no existe en el repositorio octocat/demo",
     );
+  });
+});
+
+describe("createBranch (extra)", () => {
+  it("sin fromBranch usa la branch por defecto y crea el ref con su SHA", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.repos.get.mockResolvedValue({ data: { default_branch: "main" } });
+    rest.git.getRef.mockResolvedValue({ data: { object: { sha: "sha-main" } } });
+    rest.git.createRef.mockResolvedValue({ data: {} });
+
+    const branch = await createBranch(octokit, { owner: "octocat", repo: "demo", branch: "feature/login" });
+
+    expect(rest.git.getRef).toHaveBeenCalledWith({ owner: "octocat", repo: "demo", ref: "heads/main" });
+    expect(rest.git.createRef).toHaveBeenCalledWith({
+      owner: "octocat",
+      repo: "demo",
+      ref: "refs/heads/feature/login",
+      sha: "sha-main",
+    });
+    expect(branch).toEqual({
+      name: "feature/login",
+      fromBranch: "main",
+      sha: "sha-main",
+      url: "https://github.com/octocat/demo/tree/feature/login",
+    });
+  });
+
+  it("branch de origen inexistente -> mensaje que la nombra, sin intentar crear", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.git.getRef.mockRejectedValue(httpError(404, "Not Found"));
+
+    await expect(
+      createBranch(octokit, { owner: "octocat", repo: "demo", branch: "nueva", fromBranch: "nope" }),
+    ).rejects.toThrow("La branch de origen nope no existe en el repositorio octocat/demo");
+    expect(rest.repos.get).not.toHaveBeenCalled();
+    expect(rest.git.createRef).not.toHaveBeenCalled();
+  });
+
+  it("branch que ya existe (422) -> mensaje claro, no el de repositorio duplicado", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.git.getRef.mockResolvedValue({ data: { object: { sha: "x" } } });
+    rest.git.createRef.mockRejectedValue(httpError(422, "Reference already exists"));
+
+    await expect(
+      createBranch(octokit, { owner: "octocat", repo: "demo", branch: "develop", fromBranch: "main" }),
+    ).rejects.toThrow("La branch develop ya existe en el repositorio octocat/demo. Elige otro nombre.");
+  });
+});
+
+describe("closeIssue y addCommentToIssue (extra)", () => {
+  it("closeIssue envía state=closed con el motivo", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.issues.update.mockResolvedValue({ data: rawIssue(5, { state: "closed" }) });
+
+    const issue = await closeIssue(octokit, { owner: "octocat", repo: "demo", issueNumber: 5, reason: "not_planned" });
+
+    expect(rest.issues.update).toHaveBeenCalledWith({
+      owner: "octocat",
+      repo: "demo",
+      issue_number: 5,
+      state: "closed",
+      state_reason: "not_planned",
+    });
+    expect(issue).toMatchObject({ number: 5, state: "closed" });
+  });
+
+  it("issue inexistente (404) -> mensaje con el número del issue", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.issues.update.mockRejectedValue(httpError(404, "Not Found"));
+
+    await expect(
+      closeIssue(octokit, { owner: "octocat", repo: "demo", issueNumber: 99, reason: "completed" }),
+    ).rejects.toThrow("El issue #99 no existe en el repositorio octocat/demo");
+  });
+
+  it("addCommentToIssue devuelve el id y la URL del comentario", async () => {
+    const { rest, octokit } = fakeOctokit();
+    rest.issues.createComment.mockResolvedValue({
+      data: { id: 321, html_url: "https://github.com/octocat/demo/issues/5#issuecomment-321" },
+    });
+
+    const comment = await addCommentToIssue(octokit, { repo: "demo", issueNumber: 5, body: "Avance listo" });
+
+    expect(rest.issues.createComment).toHaveBeenCalledWith({
+      owner: "octocat",
+      repo: "demo",
+      issue_number: 5,
+      body: "Avance listo",
+    });
+    expect(comment).toEqual({
+      id: 321,
+      issueNumber: 5,
+      url: "https://github.com/octocat/demo/issues/5#issuecomment-321",
+    });
   });
 });
 

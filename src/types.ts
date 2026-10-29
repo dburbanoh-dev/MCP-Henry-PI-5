@@ -27,6 +27,20 @@ export interface IssueSummary {
   createdAt: string;
 }
 
+export interface BranchResult {
+  name: string;
+  fromBranch: string;
+  /** SHA del commit desde el que nace la branch. */
+  sha: string;
+  url: string;
+}
+
+export interface CommentResult {
+  id: number;
+  issueNumber: number;
+  url: string;
+}
+
 export interface CommitResult {
   /** "created" si el archivo es nuevo, "updated" si se modificó uno existente. */
   action: "created" | "updated";

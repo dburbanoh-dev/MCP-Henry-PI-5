@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "../src/errors/index.js";
 import {
+  addCommentToIssueSchema,
+  closeIssueSchema,
+  createBranchSchema,
   createCommitSchema,
   createIssueSchema,
   createRepositorySchema,
@@ -101,6 +104,29 @@ describe("createCommitSchema", () => {
   it("rechaza un mensaje de commit vacío", () => {
     expect(errorsOf(createCommitSchema, { ...valid, message: "" })).toContain(
       "El mensaje del commit no puede estar vacío",
+    );
+  });
+});
+
+describe("schemas de las tools extra", () => {
+  it("createBranchSchema valida el nombre de la branch nueva y la de origen", () => {
+    expect(errorsOf(createBranchSchema, { repo: "r", branch: "feature/login" })).toEqual([]);
+    expect(errorsOf(createBranchSchema, { repo: "r", branch: "mi rama" })).toHaveLength(1);
+    expect(errorsOf(createBranchSchema, { repo: "r", branch: "ok", fromBranch: "a..b" })).toHaveLength(1);
+  });
+
+  it("closeIssueSchema exige un número de issue entero positivo y aplica reason por defecto", () => {
+    expect(parseInput(closeIssueSchema, { repo: "r", issueNumber: 3 })).toMatchObject({ reason: "completed" });
+    expect(errorsOf(closeIssueSchema, { repo: "r", issueNumber: 0 })).toContain("issueNumber debe ser al menos 1");
+    expect(errorsOf(closeIssueSchema, { repo: "r", issueNumber: 1.5 })).toContain("issueNumber debe ser un número entero");
+    expect(errorsOf(closeIssueSchema, { repo: "r", issueNumber: 1, reason: "duplicado" })).toContain(
+      "reason debe ser completed o not_planned",
+    );
+  });
+
+  it("addCommentToIssueSchema rechaza un comentario vacío", () => {
+    expect(errorsOf(addCommentToIssueSchema, { repo: "r", issueNumber: 1, body: "   " })).toContain(
+      "El comentario no puede estar vacío",
     );
   });
 });
